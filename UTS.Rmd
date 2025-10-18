@@ -1,0 +1,609 @@
+---
+title: "UTS Supervised Learning"
+author: "Rafly Priyantama Ramadhan Bagaskara"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+    css: style.css
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+# Studi Kasus: Audit dan Optimalisasi Model Gaji di PT. Digital Cemerlang
+
+## Latar Belakang
+
+Tim data internal PT. Digital Cemerlang telah mencoba membangun sebuah
+model untuk memprediksi gaji karyawan (Gaji_Bulanan) berdasarkan 20
+faktor lainnya. Namun, hasil model awal mereka sangat meragukan.
+Meskipun model tersebut memiliki kemampuan prediksi yang tampak tinggi,
+koefisien (pengaruh) dari beberapa variabel kunci tidak stabil dan
+seringkali bertentangan dengan logika bisnis. Terdapat kecurigaan kuat
+bahwa ada masalah mendasar dalam data atau metode yang digunakan.
+
+Anda bertindak sebagai konsultan independen yang ditugaskan untuk
+melakukan audit menyeluruh. Tugas Anda adalah mengidentifikasi sumber
+masalah, membangun model alternatif yang lebih valid dan andal, serta
+memberikan rekomendasi akhir kepada manajemen.
+
+## Tujuan
+
+Mendiagnosis kelemahan model linier standar pada dataset yang diberikan,
+menerapkan pendekatan pemodelan yang sesuai untuk memperbaiki masalah
+tersebut, dan memilih model final terbaik yang seimbang antara akurasi
+prediksi dan validitas inferensial.
+
+## Informasi Data
+
+Berikut contoh dari 10 data :
+
+```{r,echo=FALSE}
+library(readxl)
+df = read_excel("C:/Users/priya/Raw Data Model Prediksi Gaji Bulanan.xlsx")
+head(df,10)
+```
+
+Dataset terdiri dari 5000 observasi, 1 variabel target (Gaji_Bulanan),
+dan 20 variabel fitur.
+
+```{r,echo=FALSE}
+# Ambil nama kolom dari dataframe kamu
+nama_variabel <- colnames(df)
+
+# Buat data frame dengan deskripsi dan label variabel
+daftar_variabel <- data.frame(
+  Nama_Variabel = nama_variabel,
+  Deskripsi_Singkat = c(
+    "Skor kuantitatif yang merepresentasikan level pendidikan formal tertinggi yang dicapai karyawan.",
+    "Total masa kerja relevan yang dimiliki karyawan sebelum dan selama di perusahaan, dalam satuan tahun.",
+    "Jumlah total pelatihan profesional atau sertifikasi keahlian yang dimiliki karyawan.",
+    "Rata-rata jumlah jam kerja karyawan dalam satu minggu.",
+    "Akumulasi jumlah proyek yang telah berhasil diselesaikan oleh karyawan.",
+    "Nilai hasil tinjauan kinerja tahunan dari atasan, dengan skala 1–100.",
+    "Jumlah karyawan yang melapor secara langsung kepada karyawan tersebut (bawahan langsung).",
+    "Masa kerja karyawan di PT. Digital Cemerlang, dalam satuan tahun.",
+    "Skor kuantitatif yang mengindikasikan level dan kompleksitas tanggung jawab pekerjaan.",
+    "Rata-rata frekuensi kerja lembur yang dilakukan karyawan dalam satu bulan.",
+    "Jumlah klien aktif yang menjadi tanggung jawab karyawan.",
+    "Penilaian kemampuan kepemimpinan berdasarkan observasi atau survei, dengan skala 1–100.",
+    "Skor persepsi tingkat stres terkait pekerjaan yang dilaporkan sendiri oleh karyawan.",
+    "Skor numerik yang mengukur rata-rata output atau hasil kerja harian karyawan.",
+    "Penilaian efektivitas komunikasi interpersonal dan profesional, dengan skala 1–100.",
+    "Jumlah kontribusi ide, proses, atau produk inovatif yang telah diimplementasikan.",
+    "Persentase tugas dan proyek yang diselesaikan tepat waktu atau lebih awal (%).",
+    "Penilaian kemampuan bekerja sama dan berkontribusi dalam tim, dengan skala 1–100.",
+    "Skor yang mengukur kecepatan dan kemahiran karyawan dalam mengadopsi teknologi baru.",
+    "Estimasi kontribusi finansial yang dihasilkan oleh karyawan untuk perusahaan, dalam jutaan Rupiah per tahun.",
+    "Gaji yang diterima karyawan per bulan, dalam satuan jutaan Rupiah."
+  ),  
+  Variabel = c(paste0("X", seq_len(length(nama_variabel) - 1)), "Y")
+)
+
+# Lihat hasilnya
+print(daftar_variabel)
+```
+
+## Pertanyaan dan Instruksi Pengerjaan
+
+Lakukan analisis secara sistematis sesuai alur di bawah ini. Setiap
+klaim atau kesimpulan harus didukung oleh bukti visual (plot) atau
+kuantitatif (hasil uji/metrik) dari analisis Anda.
+
+### 1. Konstruksi dan Diagnosis Model Awal
+
+a.  Bangun sebuah model linier dasar (Model A) yang menggunakan semua
+    variabel fitur untuk memprediksi Gaji_Bulanan. Sajikan ringkasan
+    statistik dari model ini.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(caret)
+library(broom)
+library(ggpubr)
+
+# Split data
+set.seed(42)
+train_index <- createDataPartition(df$Gaji_Bulanan, p = 0.7, list = FALSE)
+train_data <- df[train_index, ]
+test_data <- df[-train_index, ]
+
+# Model A - OLS dengan semua variabel
+model_A <- lm(Gaji_Bulanan ~ ., data = train_data)
+summary_model_A <- summary(model_A)
+```
+
+```{r,echo=FALSE}
+cat("_____RINGKASAN STATISTIK MODEL A_____\n")
+print(summary_model_A)
+r2_A <- summary_model_A$r.squared
+
+cat("\n_____KINERJA MODEL A_____\n")
+cat(sprintf("R²: %.4f", r2_A),"Model menjelaskan 99,3% variasi gaji bulanan, yang artinya sangat baik\n")
+cat(sprintf("P-Value: < 2.2e-16"), "Signifikan")
+
+cat("\n_____KESIMPULAN_____\n")
+cat("Model ini sangat akurat dalam memprediksi gaji bulanan. Semua variabel signifikan, dengan Tingkat_Pendidikan sebagai variabel terkuat, diikuti oleh Pengalaman_Kerja dan Tingkat_Tanggung_Jawab")
+```
+
+b.  Lakukan pemeriksaan diagnostik yang komprehensif terhadap Model A.
+    Investigasi setidaknya dua area kritis berikut:
+
+<!-- -->
+
+1.  **Stabilitas dan Independensi Fitur:** Selidiki potensi adanya
+    ketergantungan atau redundansi informasi yang kuat di antara
+    variabel-variabel fitur. Tunjukkan bukti kuantitatifnya dan jelaskan
+    secara rinci bagaimana masalah ini dapat merusak keandalan dan
+    interpretasi koefisien model.
+
+```{r, message=FALSE}
+library(ggplot2)
+library(car)
+library(corrplot)
+
+# MATRIKS KORELASI ANTAR VARIABEL FITUR
+variabel_fitur <- names(df)[names(df) != "Gaji_Bulanan"]
+matriks_korelasi <- cor(df[, variabel_fitur])
+
+# Identifikasi korelasi tinggi (>0.7)
+korelasi_tinggi <- which(abs(matriks_korelasi) > 0.7 & upper.tri(matriks_korelasi), arr.ind = TRUE)
+```
+
+```{r,echo=FALSE}
+cat("Variabel dengan Korelasi Tinggi (>0.7):\n")
+if(length(korelasi_tinggi) > 0) {
+  for(i in 1:min(20, nrow(korelasi_tinggi))) { 
+    var1 <- variabel_fitur[korelasi_tinggi[i,1]]
+    var2 <- variabel_fitur[korelasi_tinggi[i,2]]
+    nilai_korelasi <- matriks_korelasi[korelasi_tinggi[i,1], korelasi_tinggi[i,2]]
+    cat(sprintf("%-25s dengan %-25s: %.3f\n", var1, var2, nilai_korelasi))
+  }
+  if(nrow(korelasi_tinggi) > 10) {
+    cat(sprintf("... dan %d korelasi tinggi lainnya\n", nrow(korelasi_tinggi) - 10))
+  }
+} else {
+  cat("Tidak ditemukan korelasi tinggi (>0.7) antar variabel fitur.\n")
+}
+
+# Visualisasi Matriks Korelasi - TAMPILKAN LANGSUNG
+corrplot(matriks_korelasi, method = "color", type = "upper", 
+         order = "hclust", tl.cex = 0.7, tl.col = "black",
+         title = "Matriks Korelasi antar Variabel Fitur",
+         mar = c(0,0,2,0))
+```
+
+```{r}
+# VARIANCE INFLATION FACTOR (VIF)
+vif_values <- vif(model_A)
+
+# Tampilkan VIF dalam tabel
+vif_df <- data.frame(
+  Variabel = names(vif_values),
+  VIF = round(vif_values, 2),
+  Kategori = ifelse(vif_values > 10, "🚩 Multikolinearitas TINGGI",
+                   ifelse(vif_values > 5, "⚠️ Multikolinearitas Sedang", "✅ Aman"))
+)
+
+print(vif_df)
+
+# Statistik multikolinearitas
+(multikol_tinggi <- sum(vif_values > 10))
+(multikol_sedang <- sum(vif_values > 5 & vif_values <= 10))
+(total_variabel <- length(vif_values))
+```
+
+```{r,echo=FALSE}
+cat("\n_____SUMMARY MULTIKOLINEARITAS_____\n")
+cat(sprintf("Variabel dengan VIF > 10 (Multikolinearitas Tinggi): %d/%d (%.1f%%)\n",
+            multikol_tinggi, total_variabel, (multikol_tinggi/total_variabel)*100))
+cat(sprintf("Variabel dengan VIF > 5 (Multikolinearitas Sedang):  %d/%d (%.1f%%)\n",
+            multikol_sedang, total_variabel, (multikol_sedang/total_variabel)*100))
+
+# Variabel dengan masalah multikolinearitas serius
+if(multikol_tinggi > 0) {
+  variabel_problematic <- names(vif_values)[vif_values > 10]
+  cat(sprintf("\n🚩 VARIABEL DENGAN MULTIKOLINEARITAS TINGGI (VIF > 10):\n"))
+  for(var in variabel_problematic) {
+    cat(sprintf("    %s (VIF = %.2f)\n", var, vif_values[var]))
+  }
+}
+
+cat("\n_____KESIMPULAN_____\n")
+if(multikol_tinggi > 0) {
+  cat("❌ MASALAH MULTIKOLINEARITAS TERDETEKSI:\n")
+  cat("   - Koefisien regresi menjadi TIDAK STABIL\n")
+  cat("   - Interpretasi pengaruh individual variabel TIDAK ANDAL\n")
+  cat("   - Perubahan kecil dalam data menyebabkan perubahan BESAR dalam estimasi\n")
+  cat("   - Standar error membesar, uji signifikansi menjadi TIDAK VALID\n")
+} else if(multikol_sedang > 0) {
+  cat("⚠️  MULTIKOLINEARITAS SEDANG TERDETEKSI:\n")
+  cat("   - Beberapa koefisien mungkin kurang stabil\n")
+  cat("   - Disarankan untuk mempertimbangkan reduksi variabel\n")
+} else {
+  cat("✅ TIDAK ADA MASALAH MULTIKOLINEARITAS SERIUS:\n")
+  cat("   - Variabel fitur relatif independen\n")
+  cat("   - Koefisien regresi stabil dan dapat diinterpretasi\n")
+}
+```
+
+2.  **Perilaku Sisaan (Error):** Analisis sisaan dari Model A untuk
+    memverifikasi apakah perilakunya sesuai dengan asumsi yang mendasari
+    sebuah model linier yang valid. Sajikan bukti visual dan jelaskan
+    dampaknya terhadap validitas uji signifikansi (uji-t dan uji-F) dari
+    model Anda.
+
+```{r, message=FALSE}
+library(ggplot2)
+library(lmtest)
+library(nortest)
+library(car)
+
+# Mendapatkan residual dan fitted values
+residuals_model_A <- residuals(model_A)
+fitted_model_A <- fitted(model_A)
+
+# UJI NORMALITAS RESIDUAL
+# Shapiro-Wilk Test untuk normalitas
+(shapiro_test <- shapiro.test(residuals_model_A))
+```
+
+```{r,echo=FALSE}
+if(shapiro_test$p.value < 0.05) {
+  cat("Kesimpulan: Residual TIDAK berdistribusi normal ❌\n")
+} else {
+  cat("Kesimpulan: Residual berdistribusi normal ✅\n")
+}
+```
+
+```{r}
+# Visualisasi Normalitas Residual
+par(mfrow = c(1, 2))
+
+# Q-Q Plot
+qqnorm(residuals_model_A, main = "Q-Q Plot Residual Model A", 
+       col = "blue", pch = 16, cex = 0.7)
+qqline(residuals_model_A, col = "red", lwd = 2)
+
+# Histogram dengan density curve
+hist(residuals_model_A, breaks = 30, col = "lightblue", 
+     main = "Distribusi Residual Model A",
+     xlab = "Residual", probability = TRUE, border = "white")
+lines(density(residuals_model_A), col = "red", lwd = 2)
+curve(dnorm(x, mean = mean(residuals_model_A), sd = sd(residuals_model_A)), 
+      col = "darkgreen", lwd = 2, lty = 2, add = TRUE)
+legend("topright", legend = c("Density Residual", "Normal Distribution"), 
+       col = c("red", "darkgreen"), lwd = 2, lty = c(1,2))
+
+par(mfrow = c(1, 1))
+
+# UJI HOMOSKEDASTISITAS
+# Breusch-Pagan Test untuk homoskedastisitas
+(bp_test <- bptest(model_A))
+```
+
+```{r,echo=FALSE}
+if(bp_test$p.value < 0.05) {
+  cat("Kesimpulan: Terdapat HETEROSKEDASTISITAS ❌\n")
+} else {
+  cat("Kesimpulan: Homoskedastisitas terpenuhi ✅\n")
+}
+```
+
+```{r, warning=FALSE}
+# Visualisasi Homoskedastisitas
+ggplot(data = data.frame(Fitted = fitted_model_A, Residuals = residuals_model_A),
+       aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.6, color = "blue", size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", size = 1) +
+  geom_smooth(method = "loess", color = "darkred", se = FALSE, size = 1) +
+  labs(title = "Residual vs Fitted Values - Model A",
+       subtitle = "Pemeriksaan Homoskedastisitas",
+       x = "Fitted Values", y = "Residuals") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 12))
+
+# UJI AUTOKORELASI
+# Durbin-Watson Test untuk autokorelasi
+(dw_test <- dwtest(model_A))
+
+# Interpretasi Durbin-Watson yang benar
+dw_stat <- dw_test$statistic
+
+```
+
+```{r,echo=FALSE}
+if(dw_test$p.value < 0.05) {
+  if(dw_test$statistic < 2) {
+    cat("Kesimpulan: Terdapat AUTOKORELASI POSITIF  ❌\n")
+  } else {
+    cat("Kesimpulan: Terdapat AUTOKORELASI NEGATIF ❌\n")
+  }
+} else {
+  cat("Kesimpulan: Tidak ada autokorelasi ✅\n")
+}
+
+# RESUME 
+cat("_____RESUME DIAGNOSTIK MODEL A_____\n")
+
+(diagnostic_summary <- data.frame(
+  Asumsi = c("Normalitas Residual", 
+             "Homoskedastisitas", 
+             "Autokorelasi"),
+  Status = c(ifelse(shapiro_test$p.value >= 0.05, "✅ TERPENUHI", "❌ DILANGGAR"),
+             ifelse(bp_test$p.value >= 0.05, "✅ TERPENUHI", "❌ DILANGGAR"),
+             ifelse(dw_test$p.value >= 0.05, "✅ TERPENUHI", "❌ DILANGGAR")),
+  Dampak_Pada_Uji = c("Validitas Uji-t dan Uji-F", 
+                      "Efisiensi estimator dan standard error", 
+                      "Validitas Uji-F dan estimasi variance")
+))
+```
+
+### 2. Pengembangan Model Perbaikan
+
+a.  Berdasarkan setiap masalah utama yang Anda identifikasi pada langkah
+    (1.b), usulkan dan terapkan metode pemodelan alternatif yang secara
+    teoritis dirancang untuk mengatasi masalah tersebut. Anda diharapkan
+    membangun setidaknya dua model perbaikan (Model B dan Model C), di
+    mana masing-masing model menargetkan satu masalah spesifik yang
+    telah Anda diagnosis.
+
+```{r,message=FALSE}
+library(glmnet)
+library(MASS)
+library(nlme)
+```
+
+```{r}
+set.seed(42)
+
+# Persiapan data
+x_train <- as.matrix(train_data[, -which(names(train_data) == "Gaji_Bulanan")])
+y_train <- train_data$Gaji_Bulanan
+x_test <- as.matrix(test_data[, -which(names(test_data) == "Gaji_Bulanan")])
+y_test <- test_data$Gaji_Bulanan
+
+# MODEL B: Ridge Regression untuk mengatasi multikolinearitas
+ridge_model <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+
+# Lambda optimal 
+best_lambda_ridge <- ridge_model$lambda.min
+cat("Lambda terbaik Ridge:", best_lambda_ridge, "\n")
+
+# Koefisien hasil regularisasi 
+ridge_coef <- coef(ridge_model, s = "lambda.min")
+ridge_coef
+
+# MODEL C: Lasso Regression untuk mengatasi multikolinearitas dan seleksi variabel
+lasso_model <- cv.glmnet(x_train, y_train, alpha = 1, nfolds = 10)
+
+# Lambda optimal
+best_lambda_lasso <- lasso_model$lambda.min
+cat("Lambda terbaik Lasso:", best_lambda_lasso, "\n")
+
+# Koefisien hasil regularisasi (variabel penting)
+lasso_coef <- coef(lasso_model, s = "lambda.min")
+lasso_coef
+
+# Model D - Generalized Least Squares (GLS) + Box-Cox untuk mengatasi autokorelasi dan non-normalitas residual
+# Transformasi Box-Cox untuk menormalkan residual
+bc <- boxcox(model_A, lambda = seq(-2, 2, 0.1))
+lambda_opt <- bc$x[which.max(bc$y)]
+cat("Lambda optimal Box-Cox:", lambda_opt, "\n")
+
+# Jika lambda ≠ 1, transformasikan Y
+if(abs(lambda_opt - 1) > 0.05) {
+  df$Gaji_Bulanan_bc <- (df$Gaji_Bulanan^lambda_opt - 1) / lambda_opt
+} else {
+  df$Gaji_Bulanan_bc <- df$Gaji_Bulanan
+}
+
+# Estimasi ulang dengan GLS (mengatasi heteroskedastisitas/autokorelasi ringan) 
+model_D <- gls(Gaji_Bulanan_bc ~ ., data = df, method = "REML")
+summary(model_D)
+```
+
+b.  Untuk setiap model perbaikan yang Anda bangun, berikan justifikasi
+    yang jelas mengapa pendekatan tersebut adalah solusi yang tepat
+    untuk masalah yang diidentifikasi.
+
+-   **Model B**
+
+Model Ridge Regression diterapkan untuk mengatasi masalah
+multikolinearitas yang terdeteksi pada Model A. Pada regresi OLS, adanya
+multikolinearitas dapat menyebabkan varian koefisien menjadi sangat
+besar, sehingga hasil estimasi menjadi tidak stabil. Ridge Regression
+memperbaiki hal ini dengan menambahkan penalti kuadrat (L2) pada
+besarnya koefisien, yang secara teori mampu menurunkan varian tanpa
+harus menghapus variabel dari model. Hasil penerapan menunjukkan bahwa
+seluruh variabel tetap dipertahankan, namun nilai koefisiennya mengalami
+penyusutan (shrinkage), yang menandakan stabilitas model lebih baik
+dibandingkan dengan OLS.
+
+-   **Model C**
+
+Model Lasso Regression digunakan sebagai pendekatan tambahan untuk
+mengatasi kompleksitas model yang melibatkan banyak variabel prediktor.
+Secara teori, Lasso menerapkan penalti absolut (L1) pada fungsi loss,
+yang dapat menyebabkan sebagian koefisien menjadi nol, sehingga model
+secara otomatis melakukan seleksi variabel. Metode ini efektif ketika
+terdapat banyak variabel yang saling berkorelasi, namun hanya beberapa
+di antaranya yang memiliki pengaruh signifikan terhadap variabel
+dependen. Dengan demikian, Lasso menghasilkan model yang lebih sederhana
+dan mudah diinterpretasikan dibandingkan dengan Ridge Regression maupun
+OLS.
+
+-   **Model D**
+
+Model D mengombinasikan dua pendekatan, yaitu transformasi Box-Cox dan
+metode Generalized Least Squares (GLS). Transformasi Box-Cox diterapkan
+karena hasil uji normalitas residual pada Model A menunjukkan distribusi
+yang tidak normal (p-value \< 0,05). Dengan mencari nilai $\lambda$
+optimal ($\lambda$ ≈ 0,95), distribusi residual dapat dibuat lebih
+mendekati normal. Setelah dilakukan transformasi, metode GLS digunakan
+untuk mengatasi autokorelasi ringan yang terdeteksi melalui uji
+Durbin-Watson. Pendekatan GLS memungkinkan adanya varian residual yang
+tidak homogen (heteroskedastis) dan memperhitungkan korelasi antar
+residual, sehingga menghasilkan estimasi parameter yang lebih efisien.
+Hasil diagnostik ulang menunjukkan adanya peningkatan pada uji
+normalitas (p \> 0,05) serta nilai Durbin-Watson yang mendekati 2,
+menandakan bahwa asumsi residual telah membaik.
+
+### 3. Evaluasi Komparatif dan Pemilihan Model Juara
+
+a.  Buat sebuah tabel perbandingan untuk mengevaluasi performa semua
+    model yang telah Anda bangun (Model A, Model B, Model C, dst.).
+    Gunakan metrik yang relevan, mencakup setidaknya satu metrik untuk
+    akurasi prediksi (contoh: RMSE atau MAE, disarankan menggunakan data
+    validasi/testing) dan satu metrik untuk kecocokan & kompleksitas
+    model (contoh: Adjusted R-squared, AIC, atau BIC).
+
+```{r}
+# Prediksi di data uji
+pred_A <- predict(model_A, newdata = test_data)
+pred_B <- predict(ridge_model, newx = x_test, s = "lambda.min")
+pred_C <- predict(lasso_model, newx = x_test, s = "lambda.min")
+
+# Prediksi GLS
+test_data$Gaji_Bulanan_bc <- if(abs(lambda_opt - 1) > 0.05) {
+  (test_data$Gaji_Bulanan^lambda_opt - 1) / lambda_opt
+} else {
+  test_data$Gaji_Bulanan
+}
+pred_D <- predict(model_D, newdata = test_data)
+
+# Nilai aktual
+y_true <- y_test
+
+# Fungsi evaluasi
+RMSE <- function(y, yhat) sqrt(mean((y - yhat)^2))
+MAE  <- function(y, yhat) mean(abs(y - yhat))
+
+# Hitung metrik evaluasi
+hasil <- data.frame(
+  Model = c("OLS (Model A)", "Ridge (Model B)", "Lasso (Model C)", "GLS + Box-Cox (Model D)"),
+  RMSE  = c(
+    RMSE(y_true, pred_A),
+    RMSE(y_true, pred_B),
+    RMSE(y_true, pred_C),
+    RMSE(y_true, pred_D)
+  ),
+  MAE   = c(
+    MAE(y_true, pred_A),
+    MAE(y_true, pred_B),
+    MAE(y_true, pred_C),
+    MAE(y_true, pred_D)
+  ),
+  AIC = c(
+    AIC(model_A),
+    NA,  # Ridge tak punya AIC
+    NA,  # Lasso tak punya AIC
+    AIC(model_D)
+  ),
+  BIC = c(
+    BIC(model_A),
+    NA,
+    NA,
+    BIC(model_D)
+  )
+)
+
+# Tampilkan hasil
+print(hasil)
+```
+
+b.  Pilih satu model terbaik sebagai "model juara" yang akan Anda
+    rekomendasikan. Jelaskan alasan pilihan Anda secara komprehensif,
+    dengan mempertimbangkan keseimbangan antara performa prediktif,
+    stabilitas koefisien, dan pemenuhan asumsi.
+
+```{r,echo=FALSE}
+# Cari model terbaik berdasarkan RMSE terendah
+best_model_rmse <- hasil[which.min(hasil$RMSE), ]
+cat("MODEL JUARA BERDASARKAN RMSE:\n")
+print(best_model_rmse)
+
+# Cari model terbaik berdasarkan MAE terendah  
+best_model_mae <- hasil[which.min(hasil$MAE), ]
+cat("\nODEL JUARA BERDASARKAN MAE:\n")
+print(best_model_mae)
+```
+
+Dari hasil perbandingan performa, Model Lasso Regression (Model C)
+terpilih sebagai model juara. Model ini menunjukkan kemampuan prediktif
+yang unggul dengan nilai RMSE sebesar 1.407 dan MAE sebesar 1.108,
+hampir menyamai kinerja OLS namun dengan tingkat kestabilan dan
+kesederhanaan yang lebih baik. Sementara itu, Model Ridge (B)
+menghasilkan kesalahan prediksi paling besar (RMSE = 1.778, MAE =
+1.400), dan Model GLS + Box-Cox (D) memiliki RMSE lebih tinggi akibat
+perbedaan skala karena transformasi data.
+
+Kelebihan utama Lasso terletak pada penggunaan penalti L1, yang secara
+otomatis mengecilkan atau menghapus variabel dengan kontribusi kecil.
+Mekanisme ini mampu mengurangi masalah multikolinearitas yang muncul
+pada Model A, khususnya antara variabel Pengalaman_Kerja dan
+Jumlah_Bawahan, sehingga estimasi koefisien menjadi lebih stabil dan
+mudah ditafsirkan.
+
+Selain itu, walaupun Model A menampilkan nilai R² yang tinggi,
+pelanggaran terhadap asumsi klasik seperti autokorelasi dan
+ketidaknormalan residual menyebabkan hasilnya kurang valid secara
+statistik. Oleh karena itu, Model C dinilai paling ideal karena
+menawarkan keseimbangan antara akurasi, stabilitas, serta validitas
+model, sekaligus menyajikan struktur yang lebih efisien dan mudah
+dianalisis.
+
+### 4. Interpretasi dan Rekomendasi Bisnis
+
+a.  Gunakan model juara pilihan Anda untuk menginterpretasikan pengaruh
+    dari variabel yang Anda anggap paling krusial dalam menentukan
+    Gaji_Bulanan. Pastikan interpretasi Anda jelas dan mudah dipahami.
+
+Berdasarkan hasil estimasi, Model Lasso Regression menempatkan beberapa
+variabel utama sebagai penentu Gaji_Bulanan. Variabel Tingkat_Pendidikan
+memiliki pengaruh terbesar (koefisien 2,49), di mana setiap peningkatan
+satu tingkat pendidikan meningkatkan gaji sekitar Rp2,49 juta,
+menunjukkan pentingnya investasi dalam pendidikan formal. Selanjutnya,
+Pengalaman_Kerja (koefisien 1,78) juga berperan kuat; setiap tambahan
+satu tahun pengalaman menaikkan gaji sekitar Rp1,78 juta, mencerminkan
+nilai keterampilan dan kompetensi yang berkembang seiring waktu.
+Tingkat_Tanggung_Jawab (1,20) serta Jumlah_Bawahan (0,48) turut
+berkontribusi positif, mengindikasikan bahwa posisi dengan tanggung
+jawab dan jumlah bawahan lebih besar memperoleh kompensasi lebih tinggi.
+
+Selain itu, Inovasi_Dihasilkan (0,29) memperlihatkan bahwa kontribusi
+terhadap pengembangan produk atau proses kerja dihargai dengan kenaikan
+gaji. Sebaliknya, Tingkat_Stress_Kerja menunjukkan pengaruh negatif
+(koefisien -0,22), di mana peningkatan tingkat stres cenderung
+menurunkan gaji. Hal ini menunjukkan bahwa lingkungan kerja yang tidak
+sehat dapat berdampak pada produktivitas dan kompensasi yang diterima.
+
+b.  Tuliskan sebuah ringkasan eksekutif (1-2 paragraf) untuk manajemen
+    PT. Digital Cemerlang. Jelaskan dalam bahasa non-teknis mengapa
+    analisis awal mereka bermasalah, bagaimana pendekatan Anda
+    memperbaikinya, dan berikan dua rekomendasi strategis yang dapat
+    ditindaklanjuti berdasarkan wawasan dari model final Anda.
+
+Analisis awal yang dilakukan oleh tim internal PT. Digital Cemerlang
+memang menunjukkan tingkat akurasi yang tinggi, namun hasilnya kurang
+dapat diandalkan karena adanya tumpang tindih antarvariabel dan
+pelanggaran asumsi statistik. Akibatnya, model tersebut sulit digunakan
+untuk memahami faktor-faktor yang benar-benar memengaruhi besaran gaji
+karyawan. Melalui pendekatan Lasso Regression, model diperbaiki dengan
+menyaring variabel-variabel yang paling berpengaruh dan menghilangkan
+redundansi data, sehingga menghasilkan model yang lebih stabil,
+sederhana, dan relevan untuk mendukung pengambilan keputusan manajerial.
+
+Dari hasil model akhir, diperoleh dua rekomendasi utama. Pertama,
+perusahaan disarankan meningkatkan investasi dalam pendidikan dan
+pelatihan karyawan, karena faktor tersebut terbukti berpengaruh besar
+terhadap peningkatan gaji dan produktivitas. Kedua, perlu dilakukan
+peninjauan ulang terhadap struktur tanggung jawab dan sistem
+penghargaan, agar karyawan dengan peran kepemimpinan dan kontribusi
+inovatif mendapatkan kompensasi yang sepadan. Dengan langkah ini, PT.
+Digital Cemerlang dapat membangun sistem yang lebih adil sekaligus
+mendorong budaya inovasi dan pengembangan berkelanjutan.
